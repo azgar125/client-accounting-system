@@ -15,33 +15,39 @@ WORKDIR /var/www/html
 # Copy application
 COPY . .
 
-# 🔑 Delete ALL bootstrap cache BEFORE composer
+# Delete all bootstrap cache BEFORE composer
 RUN rm -rf bootstrap/cache/* \
     && mkdir -p bootstrap/cache \
     && echo '*' > bootstrap/cache/.gitignore \
     && echo '!.gitignore' >> bootstrap/cache/.gitignore
 
-# 🔑 Delete existing .env if copied from local
+# Delete existing .env if copied from local
 RUN rm -f .env
 
 # Install dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-# 🔑 Delete ALL cache AGAIN after composer
+# Delete all cache AGAIN after composer
 RUN rm -rf bootstrap/cache/* \
     && mkdir -p bootstrap/cache \
     && echo '*' > bootstrap/cache/.gitignore \
     && echo '!.gitignore' >> bootstrap/cache/.gitignore
 
-# 🔑 Delete .env AGAIN if created by any process
+# Delete .env AGAIN
 RUN rm -f .env
 
-# 🔑 FULL WRITE PERMISSIONS
+# 🔑 Set permissions - INCLUDING ca.pem
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 755 /var/www/html/storage \
+    && chmod -R 755 /var/www/html/bootstrap/cache \
+    && chmod 644 /var/www/html/storage/certs/ca.pem
+
+# Full write permissions for runtime
 RUN chmod -R 777 bootstrap/cache storage
 
 EXPOSE 8000
 
-# 🔑 Startup: NO config:cache, NO .env file — env vars read fresh
+# 🔑 Startup: clear caches, serve
 CMD php artisan config:clear \
     && php artisan route:clear \
     && php artisan view:clear \
@@ -49,9 +55,3 @@ CMD php artisan config:clear \
     && rm -f bootstrap/cache/*.php \
     && rm -f .env \
     && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
-
-# After composer install
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chmod -R 755 /var/www/html/storage \
-    && chmod -R 755 /var/www/html/bootstrap/cache \
-    && chmod 644 /var/www/html/storage/certs/ca.pem 2>/dev/null || true

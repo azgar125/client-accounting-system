@@ -49,3 +49,9 @@ CMD php artisan config:clear \
     && rm -f bootstrap/cache/*.php \
     && rm -f .env \
     && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
+
+# After composer install
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 755 /var/www/html/storage \
+    && chmod -R 755 /var/www/html/bootstrap/cache \
+    && chmod 644 /var/www/html/storage/certs/ca.pem 2>/dev/null || true

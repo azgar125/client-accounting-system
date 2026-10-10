@@ -87,3 +87,8 @@ backup-*
 cookies.txt
 backend/cookies.txt
 backend/login.json
+
+# Certificates - NEVER commit
+backend/storage/certs/*.pem
+backend/storage/certs/*.crt
+backend/storage/certs/*.key

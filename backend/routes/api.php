@@ -17,6 +17,7 @@ use App\Http\Controllers\{
     ActivityLogController,
     ClientPortalController
 };
+use Illuminate\Support\Facades\DB;
 
 /* ============================================================
  |  PUBLIC ROUTES (No auth required)
@@ -149,4 +150,21 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 });
 
+
+Route::get('/db-test', function () {
+    try {
+        DB::connection()->getPdo();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Aiven MySQL connected successfully',
+            'database' => DB::connection()->getDatabaseName(),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], 500);
+    }
+});
 

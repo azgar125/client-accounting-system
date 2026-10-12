@@ -3,7 +3,7 @@ import axios from 'axios';
 // VITE_API_URL must NOT include /api — only the base domain
 // Example: https://client-accounting-system.onrender.com
 const API_URL = (
-  import.meta.env.VITE_API_URL || 'https://client-accounting-system.onrender.com'
+  import.meta.env.VITE_API_URL  || 'https://client-accounting-system.onrender.com'
 ).replace(/\/api\/?$/, '');
 
 /**

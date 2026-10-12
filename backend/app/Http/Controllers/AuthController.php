@@ -39,7 +39,7 @@ class AuthController extends Controller
 
         $user->forceFill(['last_login_at' => now()])->save();
 
-        $this->audit->log('LOGIN', 'AUTH', $user->id, null, null, $request);
+        //$this->audit->log('LOGIN', 'AUTH', $user->id, null, null, $request);
 
         return ApiResponse::success([
             'user' => [

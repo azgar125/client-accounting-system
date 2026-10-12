@@ -20,33 +20,54 @@ use App\Http\Controllers\{
     ClientPortalController
 };
 
+
 /*
 |--------------------------------------------------------------------------
 | PUBLIC ROUTES
 |--------------------------------------------------------------------------
-|
-| Routes that do not require authentication.
-|
 */
 
 
 /*
 |--------------------------------------------------------------------------
-| AUTH - LOGIN
+| LOGIN
 |--------------------------------------------------------------------------
 |
-| IMPORTANT:
-| `web` middleware is required because AuthController uses:
-|
-| $request->session()->regenerate();
+| StartSession is already added globally to the API middleware
+| inside bootstrap/app.php.
 |
 */
 
-Route::post('/auth/login', [AuthController::class, 'login'])
-    ->middleware([
-        'web',
-        'throttle:5,1',
+Route::post('/auth/login', [
+    AuthController::class,
+    'login'
+])->middleware('throttle:5,1');
+
+
+/*
+|--------------------------------------------------------------------------
+| TEMPORARY SESSION TEST
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+| Remove this route after debugging.
+|
+*/
+
+Route::get('/session-test', function (\Illuminate\Http\Request $request) {
+
+    $request->session()->put(
+        'test',
+        'working'
+    );
+
+    return response()->json([
+        'success' => true,
+        'session' => $request->session()->get('test'),
+        'message' => 'Session is working',
     ]);
+
+});
 
 
 /*
@@ -54,7 +75,7 @@ Route::post('/auth/login', [AuthController::class, 'login'])
 | TEMPORARY DATABASE TEST
 |--------------------------------------------------------------------------
 |
-| Remove this route after confirming the database connection.
+| Remove after debugging.
 |
 */
 
@@ -65,8 +86,8 @@ Route::get('/db-test', function () {
         DB::connection()->getPdo();
 
         return response()->json([
-            'success'  => true,
-            'message'  => 'Aiven MySQL connected successfully',
+            'success' => true,
+            'message' => 'Aiven MySQL connected successfully',
             'database' => DB::connection()->getDatabaseName(),
         ]);
 
@@ -85,23 +106,18 @@ Route::get('/db-test', function () {
 | AUTHENTICATED ROUTES
 |--------------------------------------------------------------------------
 |
-| `web`
-|   -> Enables Laravel session.
-|
-| `auth:sanctum`
-|   -> Checks Sanctum authenticated user.
+| Session is already started by the API middleware.
 |
 */
 
 Route::middleware([
-    'web',
     'auth:sanctum',
 ])->group(function () {
 
 
     /*
     |--------------------------------------------------------------------------
-    | AUTH
+    | LOGOUT
     |--------------------------------------------------------------------------
     */
 
@@ -109,6 +125,13 @@ Route::middleware([
         AuthController::class,
         'logout'
     ]);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | CURRENT USER
+    |--------------------------------------------------------------------------
+    */
 
     Route::get('/auth/me', [
         AuthController::class,

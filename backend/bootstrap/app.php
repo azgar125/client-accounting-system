@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Session\Middleware\StartSession;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -16,22 +17,39 @@ return Application::configure(basePath: dirname(__DIR__))
 
         /*
         |--------------------------------------------------------------------------
-        | Laravel Sanctum SPA Authentication
+        | Sanctum SPA Authentication
+        |--------------------------------------------------------------------------
+        */
+
+        $middleware->statefulApi();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Start Session for API
         |--------------------------------------------------------------------------
         |
-        | Required for React/Vercel frontend + Laravel session authentication.
+        | Your AuthController uses:
+        |
+        | $request->session()
+        |
+        | Therefore the API requests must have StartSession middleware.
         |
         */
-        $middleware->statefulApi();
+
+        $middleware->appendToGroup('api', [
+            StartSession::class,
+        ]);
 
         /*
         |--------------------------------------------------------------------------
         | CSRF
         |--------------------------------------------------------------------------
         |
-        | API routes are excluded from normal web CSRF validation.
+        | API routes are excluded because the React frontend
+        | communicates with Laravel API.
         |
         */
+
         $middleware->validateCsrfTokens(except: [
             'api/*',
         ]);
@@ -40,5 +58,4 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })
-
     ->create();

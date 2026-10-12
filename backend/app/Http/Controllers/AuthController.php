@@ -26,6 +26,12 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
+        /*
+        |--------------------------------------------------------------------------
+        | Validate Request
+        |--------------------------------------------------------------------------
+        */
+
         $credentials = $request->validate([
             'email' => [
                 'required',
@@ -64,7 +70,6 @@ class AuthController extends Controller
                 $user->password
             )
         ) {
-
             throw ValidationException::withMessages([
                 'email' => [
                     'Invalid credentials.'
@@ -75,7 +80,7 @@ class AuthController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | Check User Status
+        | Check Account Status
         |--------------------------------------------------------------------------
         */
 
@@ -93,16 +98,9 @@ class AuthController extends Controller
         |--------------------------------------------------------------------------
         | Login User
         |--------------------------------------------------------------------------
-        |
-        | IMPORTANT:
-        | Session middleware must be active.
-        |
         */
 
-        Auth::guard('web')->login(
-            $user,
-            true
-        );
+        Auth::guard('web')->login($user);
 
 
         /*
@@ -127,7 +125,7 @@ class AuthController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | Audit Log
+        | Audit Login
         |--------------------------------------------------------------------------
         */
 
@@ -151,15 +149,10 @@ class AuthController extends Controller
             [
                 'user' => [
                     'id' => $user->id,
-
                     'name' => $user->name,
-
                     'email' => $user->email,
-
                     'role' => $user->role->value,
-
                     'status' => $user->status->value,
-
                     'client_id' => $user->client_id,
                 ],
             ],
@@ -176,6 +169,12 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
+        /*
+        |--------------------------------------------------------------------------
+        | Current User
+        |--------------------------------------------------------------------------
+        */
+
         $user = $request->user();
 
 
@@ -246,6 +245,12 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
+        /*
+        |--------------------------------------------------------------------------
+        | Current User
+        |--------------------------------------------------------------------------
+        */
+
         $user = $request->user();
 
 
@@ -267,22 +272,17 @@ class AuthController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | User Response
+        | Response
         |--------------------------------------------------------------------------
         */
 
         return ApiResponse::success(
             [
                 'id' => $user->id,
-
                 'name' => $user->name,
-
                 'email' => $user->email,
-
                 'role' => $user->role->value,
-
                 'status' => $user->status->value,
-
                 'client_id' => $user->client_id,
             ],
             'OK'

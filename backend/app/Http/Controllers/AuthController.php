@@ -3,212 +3,289 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\ApiResponse;
+use App\Services\AuditService;
+use App\Models\User;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
-use App\Models\User;
-use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
-    /**
-     * Login
-     */
+    public function __construct(
+        private AuditService $audit
+    ) {}
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | LOGIN
+    |--------------------------------------------------------------------------
+    */
+
     public function login(Request $request)
     {
-        try {
+        $credentials = $request->validate([
+            'email' => [
+                'required',
+                'email',
+            ],
 
-            // 1. Validate request
-            $credentials = $request->validate([
-                'email' => ['required', 'email'],
-                'password' => ['required', 'string'],
+            'password' => [
+                'required',
+                'string',
+            ],
+        ]);
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Find User
+        |--------------------------------------------------------------------------
+        */
+
+        $user = User::where(
+            'email',
+            $credentials['email']
+        )->first();
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Check Credentials
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            ! $user ||
+            ! Hash::check(
+                $credentials['password'],
+                $user->password
+            )
+        ) {
+
+            throw ValidationException::withMessages([
+                'email' => [
+                    'Invalid credentials.'
+                ],
             ]);
+        }
 
-            // 2. Find user
-            $user = User::where('email', $credentials['email'])->first();
 
-            // 3. Check email/password
-            if (
-                ! $user ||
-                ! Hash::check($credentials['password'], $user->password)
-            ) {
-                throw ValidationException::withMessages([
-                    'email' => ['Invalid credentials.'],
-                ]);
-            }
+        /*
+        |--------------------------------------------------------------------------
+        | Check User Status
+        |--------------------------------------------------------------------------
+        */
 
-            // 4. Check active status
-            if (! $user->isActive()) {
-                return ApiResponse::error(
-                    'Account is not active.',
-                    [],
-                    403
-                );
-            }
+        if (! $user->isActive()) {
 
-            // 5. Login using web session
-            Auth::guard('web')->login($user, true);
+            return ApiResponse::error(
+                'Account is not active.',
+                [],
+                403
+            );
+        }
 
-            // 6. Regenerate session
-            $request->session()->regenerate();
 
-            // 7. Update last login
-            $user->forceFill([
-                'last_login_at' => now(),
-            ])->save();
+        /*
+        |--------------------------------------------------------------------------
+        | Login User
+        |--------------------------------------------------------------------------
+        |
+        | IMPORTANT:
+        | Session middleware must be active.
+        |
+        */
 
-            // 8. Log successful login
-            Log::info('User logged in successfully', [
-                'user_id' => $user->id,
-                'email'   => $user->email,
-            ]);
+        Auth::guard('web')->login(
+            $user,
+            true
+        );
 
-            // 9. Return response
-            return ApiResponse::success([
+
+        /*
+        |--------------------------------------------------------------------------
+        | Regenerate Session
+        |--------------------------------------------------------------------------
+        */
+
+        $request->session()->regenerate();
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Update Last Login
+        |--------------------------------------------------------------------------
+        */
+
+        $user->forceFill([
+            'last_login_at' => now(),
+        ])->save();
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Audit Log
+        |--------------------------------------------------------------------------
+        */
+
+        $this->audit->log(
+            'LOGIN',
+            'AUTH',
+            $user->id,
+            null,
+            null,
+            $request
+        );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Response
+        |--------------------------------------------------------------------------
+        */
+
+        return ApiResponse::success(
+            [
                 'user' => [
-                    'id'        => $user->id,
-                    'name'      => $user->name,
-                    'email'     => $user->email,
-                    'role'      => $this->getEnumValue($user->role),
-                    'status'    => $this->getEnumValue($user->status),
+                    'id' => $user->id,
+
+                    'name' => $user->name,
+
+                    'email' => $user->email,
+
+                    'role' => $user->role->value,
+
+                    'status' => $user->status->value,
+
                     'client_id' => $user->client_id,
                 ],
-            ], 'Logged in');
-
-        } catch (ValidationException $e) {
-
-            // Validation errors
-            throw $e;
-
-        } catch (\Throwable $e) {
-
-            // Log complete error
-            Log::error('Login error', [
-                'message' => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-                'email'   => $request->input('email'),
-            ]);
-
-            // TEMPORARY DEBUG RESPONSE
-            return response()->json([
-                'success' => false,
-                'debug'   => true,
-                'error'   => get_class($e),
-                'message' => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-            ], 500);
-        }
+            ],
+            'Logged in'
+        );
     }
 
 
-    /**
-     * Logout
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | LOGOUT
+    |--------------------------------------------------------------------------
+    */
+
     public function logout(Request $request)
     {
-        try {
+        $user = $request->user();
 
-            // Get authenticated user
-            $user = $request->user();
 
-            // Logout
-            Auth::guard('web')->logout();
+        /*
+        |--------------------------------------------------------------------------
+        | Audit Logout
+        |--------------------------------------------------------------------------
+        */
 
-            // Invalidate session
-            $request->session()->invalidate();
+        if ($user) {
 
-            // Regenerate CSRF token
-            $request->session()->regenerateToken();
-
-            Log::info('User logged out', [
-                'user_id' => $user?->id,
-            ]);
-
-            return ApiResponse::success(
+            $this->audit->log(
+                'LOGOUT',
+                'AUTH',
+                $user->id,
                 null,
-                'Logged out'
+                null,
+                $request
             );
-
-        } catch (\Throwable $e) {
-
-            Log::error('Logout error', [
-                'message' => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'debug'   => true,
-                'error'   => get_class($e),
-                'message' => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-            ], 500);
         }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Logout
+        |--------------------------------------------------------------------------
+        */
+
+        Auth::guard('web')->logout();
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Invalidate Session
+        |--------------------------------------------------------------------------
+        */
+
+        $request->session()->invalidate();
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Regenerate CSRF Token
+        |--------------------------------------------------------------------------
+        */
+
+        $request->session()->regenerateToken();
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Response
+        |--------------------------------------------------------------------------
+        */
+
+        return ApiResponse::success(
+            null,
+            'Logged out'
+        );
     }
 
 
-    /**
-     * Get currently authenticated user
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | CURRENT USER
+    |--------------------------------------------------------------------------
+    */
+
     public function me(Request $request)
     {
-        try {
+        $user = $request->user();
 
-            $user = $request->user();
 
-            if (! $user) {
-                return ApiResponse::error(
-                    'Unauthenticated',
-                    [],
-                    401
-                );
-            }
+        /*
+        |--------------------------------------------------------------------------
+        | Not Authenticated
+        |--------------------------------------------------------------------------
+        */
 
-            return ApiResponse::success([
-                'id'        => $user->id,
-                'name'      => $user->name,
-                'email'     => $user->email,
-                'role'      => $this->getEnumValue($user->role),
-                'status'    => $this->getEnumValue($user->status),
+        if (! $user) {
+
+            return ApiResponse::error(
+                'Unauthenticated',
+                [],
+                401
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | User Response
+        |--------------------------------------------------------------------------
+        */
+
+        return ApiResponse::success(
+            [
+                'id' => $user->id,
+
+                'name' => $user->name,
+
+                'email' => $user->email,
+
+                'role' => $user->role->value,
+
+                'status' => $user->status->value,
+
                 'client_id' => $user->client_id,
-            ], 'OK');
-
-        } catch (\Throwable $e) {
-
-            Log::error('Me endpoint error', [
-                'message' => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'debug'   => true,
-                'error'   => get_class($e),
-                'message' => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-            ], 500);
-        }
-    }
-
-
-    /**
-     * Safely get Enum value.
-     *
-     * Works with PHP Enum and normal string values.
-     */
-    private function getEnumValue($value)
-    {
-        if ($value instanceof \BackedEnum) {
-            return $value->value;
-        }
-
-        return $value;
+            ],
+            'OK'
+        );
     }
 }
